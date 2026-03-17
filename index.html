@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>SpaceKids Player</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #030b18;
+    color: #fff;
+    font-family: sans-serif;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    overflow: hidden;
+  }
+
+  h2 { color: #00ff88; font-size: 18px; letter-spacing: 2px; }
+
+  /* Container do player */
+  #player-wrap {
+    position: relative;
+    width: min(640px, 100vw);
+    height: min(360px, 56.25vw);
+    background: #000;
+    border: 2px solid rgba(0,255,136,0.4);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  #player { width: 100%; height: 100%; }
+
+  /* ── OVERLAYS para esconder elementos do YouTube ── */
+
+  /* Topo — esconde título e botões do topo */
+  #overlay-top {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 40px;
+    background: linear-gradient(to bottom, #000 60%, transparent);
+    z-index: 5;
+    pointer-events: none;
+  }
+
+  /* Logo YouTube — canto inferior direito */
+  #overlay-logo {
+    position: absolute;
+    bottom: 40px; right: 0;
+    width: 120px;
+    height: 30px;
+    background: #000;
+    z-index: 5;
+    pointer-events: none;
+  }
+
+  /* Cards interativos — canto superior direito */
+  #overlay-cards {
+    position: absolute;
+    top: 0; right: 0;
+    width: 50px;
+    height: 50px;
+    background: #000;
+    z-index: 5;
+    pointer-events: none;
+  }
+
+  /* Nossos controles por cima */
+  #custom-controls {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 44px;
+    background: linear-gradient(to top, rgba(0,0,0,0.9) 80%, transparent);
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    gap: 12px;
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+
+  #player-wrap:hover #custom-controls,
+  #player-wrap.show-controls #custom-controls { opacity: 1; }
+
+  .ctrl-btn {
+    background: none;
+    border: none;
+    color: #fff;
+    font-size: 18px;
+    cursor: pointer;
+    padding: 4px;
+    line-height: 1;
+    transition: transform 0.1s;
+  }
+
+  .ctrl-btn:hover { transform: scale(1.2); }
+
+  #progress-wrap {
+    flex: 1;
+    height: 4px;
+    background: rgba(255,255,255,0.2);
+    border-radius: 2px;
+    cursor: pointer;
+    position: relative;
+  }
+
+  #progress-bar {
+    height: 100%;
+    background: #00ff88;
+    border-radius: 2px;
+    width: 0%;
+    transition: width 0.5s linear;
+    pointer-events: none;
+  }
+
+  #time-label {
+    font-size: 11px;
+    color: rgba(255,255,255,0.7);
+    white-space: nowrap;
+    min-width: 80px;
+    text-align: right;
+  }
+
+  /* Loading overlay */
+  #loading {
+    position: absolute;
+    inset: 0;
+    background: #000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    z-index: 20;
+  }
+
+  .spinner {
+    width: 40px; height: 40px;
+    border: 3px solid rgba(0,255,136,0.2);
+    border-top-color: #00ff88;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Controles externos */
+  #controls {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  button.ext-btn {
+    padding: 8px 16px;
+    border-radius: 8px;
+    border: 1.5px solid rgba(0,255,136,0.4);
+    background: rgba(0,255,136,0.1);
+    color: #00ff88;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  button.ext-btn:hover { background: rgba(0,255,136,0.2); }
+  button.ext-btn.danger { border-color: rgba(255,68,68,0.4); background: rgba(255,68,68,0.1); color: #ff4444; }
+
+  #video-input-wrap {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  input {
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1.5px solid rgba(0,255,136,0.3);
+    background: #0a1a2e;
+    color: #fff;
+    font-size: 14px;
+    width: 200px;
+    outline: none;
+  }
+
+  input:focus { border-color: #00ff88; }
+
+  #status { font-size: 13px; color: #4a6070; }
+  #status span { color: #00ff88; font-weight: 700; }
+
+  #log {
+    width: min(640px, 96vw);
+    max-height: 100px;
+    overflow-y: auto;
+    background: #0a1a2e;
+    border: 1px solid rgba(0,255,136,0.15);
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 11px;
+    color: #4a6070;
+    font-family: monospace;
+  }
+
+  #log p { margin-bottom: 2px; }
+  #log p.event { color: #00ff88; }
+  #log p.error { color: #ff4444; }
+  #log p.info { color: #7a98b0; }
+</style>
+</head>
+<body>
+
+<h2>🚀 SPACEKIDS PLAYER</h2>
+
+<div id="video-input-wrap">
+  <input type="text" id="videoId" placeholder="YouTube ID" value="qv0JhWX0Gts" />
+  <button class="ext-btn" onclick="loadVideo()">▶ Carregar</button>
+</div>
+
+<!-- Player -->
+<div id="player-wrap" onclick="toggleControls()">
+  <div id="player"></div>
+
+  <!-- Overlays que cobrem elementos do YouTube -->
+  <div id="overlay-top"></div>
+  <div id="overlay-logo"></div>
+  <div id="overlay-cards"></div>
+
+  <!-- Nossos controles customizados -->
+  <div id="custom-controls">
+    <button class="ctrl-btn" id="btn-play-pause" onclick="togglePlay(event)">⏸</button>
+    <div id="progress-wrap" onclick="seekClick(event)">
+      <div id="progress-bar"></div>
+    </div>
+    <span id="time-label">0:00 / 0:00</span>
+    <button class="ctrl-btn" id="btn-mute" onclick="toggleMute(event)">🔊</button>
+    <button class="ctrl-btn" onclick="goFullscreen(event)">⛶</button>
+  </div>
+
+  <!-- Loading -->
+  <div id="loading">
+    <div class="spinner"></div>
+    <p style="color:#4a6070; font-size:13px;">🚀 Iniciando player...</p>
+  </div>
+</div>
+
+<div id="status">Status: <span id="status-text">Carregando API...</span></div>
+
+<div id="controls">
+  <button class="ext-btn" onclick="loadVideo()">🔄 Recarregar</button>
+  <button class="ext-btn danger" onclick="stopVideo()">⏹ Stop</button>
+</div>
+
+<div id="log"><p class="info">— Log de eventos —</p></div>
+
+<script src="https://www.youtube.com/iframe_api"></script>
+<script>
+  let player = null;
+  let isReady = false;
+  let isMuted = false;
+  let isPlaying = false;
+  let duration = 0;
+  let progressInterval = null;
+  let controlsTimeout = null;
+
+  function onYouTubeIframeAPIReady() {
+    log('✅ YouTube IFrame API carregada!', 'event');
+    setStatus('API pronta');
+    createPlayer(document.getElementById('videoId').value || 'qv0JhWX0Gts');
+  }
+
+  function createPlayer(videoId) {
+    log(`🎬 Criando player: ${videoId}`, 'info');
+    setStatus('Criando player...');
+    if (player) { player.destroy(); player = null; isReady = false; }
+
+    document.getElementById('loading').style.display = 'flex';
+
+    player = new YT.Player('player', {
+      videoId,
+      playerVars: {
+        autoplay: 1,
+        controls: 0,        // ← esconde controles originais do YouTube
+        modestbranding: 1,
+        rel: 0,
+        showinfo: 0,
+        iv_load_policy: 3,
+        cc_load_policy: 0,
+        fs: 0,              // ← esconde botão fullscreen do YouTube
+        disablekb: 1,       // ← desativa atalhos de teclado do YouTube
+        playsinline: 1,
+        origin: window.location.origin,
+      },
+      events: {
+        onReady: onPlayerReady,
+        onStateChange: onPlayerStateChange,
+        onError: onPlayerError,
+      }
+    });
+  }
+
+  function onPlayerReady(event) {
+    isReady = true;
+    document.getElementById('loading').style.display = 'none';
+    setStatus('Pronto ✅');
+    log('🎬 Player pronto!', 'event');
+    duration = player.getDuration();
+    event.target.playVideo();
+    isPlaying = true;
+    document.getElementById('btn-play-pause').textContent = '⏸';
+    startProgress();
+  }
+
+  function onPlayerStateChange(event) {
+    const states = {
+      '-1': '⏹ Não iniciado',
+      '0':  '✅ Finalizado',
+      '1':  '▶️ Tocando',
+      '2':  '⏸ Pausado',
+      '3':  '⏳ Buffering',
+      '5':  '📋 Na fila',
+    };
+    const state = states[event.data] || `Estado: ${event.data}`;
+    setStatus(state);
+    log(`Estado: ${state}`, 'event');
+
+    isPlaying = event.data === 1;
+    document.getElementById('btn-play-pause').textContent = isPlaying ? '⏸' : '▶';
+
+    if (event.data === 1) {
+      duration = player.getDuration();
+      startProgress();
+    } else {
+      stopProgress();
+    }
+  }
+
+  function onPlayerError(event) {
+    const errors = {
+      2: 'ID inválido', 5: 'Erro HTML5',
+      100: 'Vídeo não encontrado',
+      101: 'Embed não permitido',
+      150: 'Embed não permitido',
+    };
+    const msg = errors[event.data] || `Erro: ${event.data}`;
+    setStatus(`❌ ${msg}`);
+    log(`❌ Erro ${event.data}: ${msg}`, 'error');
+    document.getElementById('loading').style.display = 'none';
+  }
+
+  // ── Progress bar ──────────────────────────────────────────────────────────
+  function startProgress() {
+    stopProgress();
+    progressInterval = setInterval(() => {
+      if (!isReady || !player) return;
+      try {
+        const current = player.getCurrentTime();
+        const dur = duration || player.getDuration();
+        if (dur > 0) {
+          const pct = (current / dur) * 100;
+          document.getElementById('progress-bar').style.width = pct + '%';
+          document.getElementById('time-label').textContent =
+            `${formatTime(current)} / ${formatTime(dur)}`;
+        }
+      } catch(e) {}
+    }, 500);
+  }
+
+  function stopProgress() {
+    if (progressInterval) { clearInterval(progressInterval); progressInterval = null; }
+  }
+
+  function seekClick(e) {
+    e.stopPropagation();
+    if (!isReady) return;
+    const wrap = document.getElementById('progress-wrap');
+    const rect = wrap.getBoundingClientRect();
+    const pct = (e.clientX - rect.left) / rect.width;
+    const dur = duration || player.getDuration();
+    player.seekTo(pct * dur, true);
+    log(`⏩ seekTo ${formatTime(pct * dur)}`, 'info');
+  }
+
+  // ── Controles ─────────────────────────────────────────────────────────────
+  function togglePlay(e) {
+    e && e.stopPropagation();
+    if (!isReady) return;
+    if (isPlaying) { player.pauseVideo(); log('⏸ pause', 'info'); }
+    else { player.playVideo(); log('▶ play', 'info'); }
+  }
+
+  function toggleMute(e) {
+    e && e.stopPropagation();
+    if (!isReady) return;
+    if (isMuted) {
+      player.unMute(); isMuted = false;
+      document.getElementById('btn-mute').textContent = '🔊';
+      log('🔊 unmute', 'info');
+    } else {
+      player.mute(); isMuted = true;
+      document.getElementById('btn-mute').textContent = '🔇';
+      log('🔇 mute', 'info');
+    }
+  }
+
+  function stopVideo() {
+    if (!isReady) return;
+    player.stopVideo();
+    log('⏹ stop', 'info');
+  }
+
+  function goFullscreen(e) {
+    e && e.stopPropagation();
+    const wrap = document.getElementById('player-wrap');
+    if (!document.fullscreenElement) {
+      wrap.requestFullscreen?.() || wrap.webkitRequestFullscreen?.();
+      log('⛶ Fullscreen ativado', 'event');
+    } else {
+      document.exitFullscreen?.() || document.webkitExitFullscreen?.();
+      log('⛶ Fullscreen desativado', 'event');
+    }
+  }
+
+  function loadVideo() {
+    const videoId = document.getElementById('videoId').value.trim();
+    if (!videoId) return log('Digite um YouTube ID!', 'error');
+    createPlayer(videoId);
+  }
+
+  function toggleControls() {
+    const wrap = document.getElementById('player-wrap');
+    wrap.classList.add('show-controls');
+    clearTimeout(controlsTimeout);
+    controlsTimeout = setTimeout(() => wrap.classList.remove('show-controls'), 3000);
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  function formatTime(s) {
+    s = Math.floor(s);
+    const m = Math.floor(s / 60);
+    const sec = s % 60;
+    return `${m}:${sec.toString().padStart(2, '0')}`;
+  }
+
+  function setStatus(text) {
+    document.getElementById('status-text').textContent = text;
+  }
+
+  function log(msg, type = 'info') {
+    const logEl = document.getElementById('log');
+    const p = document.createElement('p');
+    p.textContent = msg;
+    p.className = type;
+    logEl.appendChild(p);
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+</script>
+</body>
+</html>
