@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SpaceKids Player — Teste</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #030b18;
+    color: #fff;
+    font-family: sans-serif;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+  }
+
+  h2 {
+    color: #00ff88;
+    font-size: 18px;
+    letter-spacing: 2px;
+  }
+
+  /* Container do player */
+  #player-wrap {
+    position: relative;
+    width: 640px;
+    height: 360px;
+    background: #000;
+    border: 2px solid rgba(0,255,136,0.4);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  #player { width: 100%; height: 100%; }
+
+  /* Loading overlay */
+  #loading {
+    position: absolute;
+    inset: 0;
+    background: #000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    z-index: 10;
+  }
+
+  .spinner {
+    width: 40px; height: 40px;
+    border: 3px solid rgba(0,255,136,0.2);
+    border-top-color: #00ff88;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Controles */
+  #controls {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+
+  button {
+    padding: 10px 20px;
+    border-radius: 8px;
+    border: 1.5px solid rgba(0,255,136,0.4);
+    background: rgba(0,255,136,0.1);
+    color: #00ff88;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  button:hover { background: rgba(0,255,136,0.2); }
+  button:active { transform: scale(0.97); }
+  button.danger { border-color: rgba(255,68,68,0.4); background: rgba(255,68,68,0.1); color: #ff4444; }
+
+  /* Input de vídeo */
+  #video-input-wrap {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  input {
+    padding: 10px 14px;
+    border-radius: 8px;
+    border: 1.5px solid rgba(0,255,136,0.3);
+    background: #0a1a2e;
+    color: #fff;
+    font-size: 14px;
+    width: 220px;
+    outline: none;
+  }
+
+  input:focus { border-color: #00ff88; }
+
+  /* Status */
+  #status {
+    font-size: 13px;
+    color: #4a6070;
+    letter-spacing: 0.5px;
+  }
+
+  #status span {
+    color: #00ff88;
+    font-weight: 700;
+  }
+
+  /* Log */
+  #log {
+    width: 640px;
+    max-height: 120px;
+    overflow-y: auto;
+    background: #0a1a2e;
+    border: 1px solid rgba(0,255,136,0.15);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 12px;
+    color: #4a6070;
+    font-family: monospace;
+  }
+
+  #log p { margin-bottom: 3px; }
+  #log p.event { color: #00ff88; }
+  #log p.error { color: #ff4444; }
+  #log p.info { color: #7a98b0; }
+</style>
+</head>
+<body>
+
+<h2>🚀 SPACEKIDS PLAYER — TESTE</h2>
+
+<!-- Input de vídeo -->
+<div id="video-input-wrap">
+  <input type="text" id="videoId" placeholder="YouTube ID (ex: qv0JhWX0Gts)" value="qv0JhWX0Gts" />
+  <button onclick="loadVideo()">▶ Carregar</button>
+</div>
+
+<!-- Player -->
+<div id="player-wrap">
+  <div id="player"></div>
+  <div id="loading">
+    <div class="spinner"></div>
+    <p style="color:#4a6070; font-size:13px;">🚀 Iniciando player...</p>
+  </div>
+</div>
+
+<!-- Status -->
+<div id="status">Status: <span id="status-text">Carregando API...</span></div>
+
+<!-- Controles -->
+<div id="controls">
+  <button onclick="playVideo()">▶ Play</button>
+  <button onclick="pauseVideo()">⏸ Pause</button>
+  <button onclick="muteVideo()">🔇 Mute</button>
+  <button onclick="unmuteVideo()">🔊 Unmute</button>
+  <button onclick="seekTo(0)">⏮ Reiniciar</button>
+  <button class="danger" onclick="stopVideo()">⏹ Stop</button>
+  <button onclick="toggleFullscreen()">⛶ Fullscreen</button>
+</div>
+
+<!-- Log de eventos -->
+<div id="log">
+  <p class="info">— Log de eventos —</p>
+</div>
+
+<!-- YouTube IFrame API -->
+<script src="https://www.youtube.com/iframe_api"></script>
+<script>
+  let player = null;
+  let isReady = false;
+
+  // ── Inicializa o player quando a API estiver pronta ─────────────────────
+  function onYouTubeIframeAPIReady() {
+    log('✅ YouTube IFrame API carregada!', 'event');
+    setStatus('API pronta');
+    createPlayer(document.getElementById('videoId').value || 'qv0JhWX0Gts');
+  }
+
+  function createPlayer(videoId) {
+    log(`🎬 Criando player com vídeo: ${videoId}`, 'info');
+    setStatus('Criando player...');
+
+    player = new YT.Player('player', {
+      videoId: videoId,
+      playerVars: {
+        autoplay: 1,         // autoplay
+        controls: 1,         // mostra controles
+        modestbranding: 1,   // remove logo grande do YouTube
+        rel: 0,              // sem vídeos relacionados
+        showinfo: 0,         // sem título/canal
+        iv_load_policy: 3,   // sem anotações
+        cc_load_policy: 0,   // sem legendas automáticas
+        fs: 1,               // permite fullscreen
+        playsinline: 1,      // não força fullscreen no mobile
+        origin: window.location.origin,
+      },
+      events: {
+        onReady: onPlayerReady,
+        onStateChange: onPlayerStateChange,
+        onError: onPlayerError,
+      }
+    });
+  }
+
+  // ── Eventos do player ─────────────────────────────────────────────────────
+  function onPlayerReady(event) {
+    isReady = true;
+    document.getElementById('loading').style.display = 'none';
+    setStatus('Pronto ✅');
+    log('🎬 Player pronto! Iniciando autoplay...', 'event');
+    event.target.playVideo();
+
+    // Injeta CSS no iframe para esconder elementos do YouTube
+    setTimeout(() => {
+      try {
+        const iframe = document.querySelector('#player iframe') || document.querySelector('iframe');
+        if (!iframe) return;
+        const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+        const style = iframeDoc.createElement('style');
+        style.innerHTML = `
+          .ytp-chrome-top,
+          .ytp-show-cards-title,
+          .ytp-cards-button,
+          .ytp-cards-teaser,
+          .ytp-ce-element,
+          .ytp-endscreen-element,
+          .ytp-pause-overlay,
+          .ytp-watermark,
+          .ytp-youtube-button,
+          .ytp-share-button,
+          .ytp-fullscreen-button,
+          .branding-img,
+          .ytp-impression-link,
+          .iv-branding,
+          .ytp-cards-button-arrow,
+          .ytp-overflow-button,
+          .annotation { 
+            display: none !important; 
+            opacity: 0 !important;
+            pointer-events: none !important;
+          }
+        `;
+        iframeDoc.head.appendChild(style);
+        log('✅ Elementos do YouTube escondidos!', 'event');
+      } catch(e) {
+        log('⚠️ Não foi possível injetar CSS no iframe (CORS): ' + e.message, 'error');
+      }
+    }, 2000);
+  }
+
+  function onPlayerStateChange(event) {
+    const states = {
+      '-1': '⏹ Não iniciado',
+      '0':  '✅ Finalizado',
+      '1':  '▶️ Tocando',
+      '2':  '⏸ Pausado',
+      '3':  '⏳ Buffering',
+      '5':  '📋 Vídeo na fila',
+    };
+    const state = states[event.data] || `Estado: ${event.data}`;
+    setStatus(state);
+    log(`Estado: ${state}`, 'event');
+  }
+
+  function onPlayerError(event) {
+    const errors = {
+      2:   'ID de vídeo inválido',
+      5:   'Erro no player HTML5',
+      100: 'Vídeo não encontrado ou removido',
+      101: 'Embed não permitido pelo dono do vídeo',
+      150: 'Embed não permitido pelo dono do vídeo',
+    };
+    const msg = errors[event.data] || `Erro desconhecido: ${event.data}`;
+    setStatus(`❌ Erro: ${msg}`);
+    log(`❌ Erro ${event.data}: ${msg}`, 'error');
+    document.getElementById('loading').style.display = 'none';
+  }
+
+  // ── Controles ─────────────────────────────────────────────────────────────
+  function playVideo() {
+    if (!isReady) return log('Player não está pronto!', 'error');
+    player.playVideo();
+    log('▶ play()', 'info');
+  }
+
+  function pauseVideo() {
+    if (!isReady) return log('Player não está pronto!', 'error');
+    player.pauseVideo();
+    log('⏸ pause()', 'info');
+  }
+
+  function stopVideo() {
+    if (!isReady) return log('Player não está pronto!', 'error');
+    player.stopVideo();
+    log('⏹ stop()', 'info');
+  }
+
+  function muteVideo() {
+    if (!isReady) return log('Player não está pronto!', 'error');
+    player.mute();
+    log('🔇 mute()', 'info');
+  }
+
+  function unmuteVideo() {
+    if (!isReady) return log('Player não está pronto!', 'error');
+    player.unMute();
+    log('🔊 unmute()', 'info');
+  }
+
+  function seekTo(seconds) {
+    if (!isReady) return log('Player não está pronto!', 'error');
+    player.seekTo(seconds, true);
+    log(`⏮ seekTo(${seconds})`, 'info');
+  }
+
+  function loadVideo() {
+    const videoId = document.getElementById('videoId').value.trim();
+    if (!videoId) return log('Digite um YouTube ID!', 'error');
+
+    if (player && isReady) {
+      player.loadVideoById(videoId);
+      log(`🎬 Carregando novo vídeo: ${videoId}`, 'info');
+    } else {
+      log('Recarregando página com novo vídeo...', 'info');
+      createPlayer(videoId);
+    }
+  }
+
+  function toggleFullscreen() {
+    const wrap = document.getElementById('player-wrap');
+    if (!document.fullscreenElement) {
+      wrap.requestFullscreen?.() 
+        || wrap.webkitRequestFullscreen?.() 
+        || wrap.mozRequestFullScreen?.();
+      log('⛶ Fullscreen ativado', 'event');
+    } else {
+      document.exitFullscreen?.() 
+        || document.webkitExitFullscreen?.();
+      log('⛶ Fullscreen desativado', 'event');
+    }
+  }
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+  function setStatus(text) {
+    document.getElementById('status-text').textContent = text;
+  }
+
+  function log(msg, type = 'info') {
+    const logEl = document.getElementById('log');
+    const p = document.createElement('p');
+    p.textContent = msg;
+    p.className = type;
+    logEl.appendChild(p);
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+</script>
+</body>
+</html>
